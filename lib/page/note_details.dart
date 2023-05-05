@@ -1,7 +1,12 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hexcolor/hexcolor.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:ndialog/ndialog.dart';
 
 class NoteDetails extends StatefulWidget {
   String title;
@@ -22,10 +27,58 @@ class NoteDetails extends StatefulWidget {
 class _NoteDetailsState extends State<NoteDetails> {
   bool? checked = false;
   bool ischecked = false;
+  File? imageFile;
+  bool showLocalFile = false;
   DateTime temp = DateTime.now();
   TextEditingController txtTitle = new TextEditingController();
   TextEditingController txtNote = new TextEditingController();
   DateTime dateTime2 = DateTime.now();
+
+  _pickImageFrom(ImageSource imageSource) async {
+    XFile? xFile = await ImagePicker().pickImage(source: imageSource);
+
+    if (xFile == null) return;
+
+    final tempImage = File(xFile.path);
+
+    imageFile = tempImage;
+    showLocalFile = true;
+    setState(() {});
+
+    ProgressDialog progressDialog = ProgressDialog(
+      context,
+      title: const Text('Uploading !!!'),
+      message: const Text('Vui lòng đợi'),
+    );
+    progressDialog.show();
+    try {
+      var fileName = '${widget.title}.jpg';
+
+      UploadTask uploadTask = FirebaseStorage.instance
+          .ref()
+          .child('note_image')
+          .child(fileName)
+          .putFile(imageFile!);
+
+      TaskSnapshot snapshot = await uploadTask;
+
+      String profileImageUrl = await snapshot.ref.getDownloadURL();
+
+      FirebaseFirestore.instance.collection("Todo").doc(widget.id).update({
+        "note": profileImageUrl,
+      });
+
+      Fluttertoast.showToast(msg: 'Note image uploaded');
+
+      print(profileImageUrl);
+
+      progressDialog.dismiss();
+    } catch (e) {
+      progressDialog.dismiss();
+
+      print(e.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +311,45 @@ class _NoteDetailsState extends State<NoteDetails> {
                                         Icons.camera_alt_outlined,
                                         size: 30,
                                       ),
-                                      onTap: () {},
+                                      onTap: () {
+                                        showModalBottomSheet(
+                                            context: context,
+                                            builder: (context) {
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.all(10),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                          Icons.image),
+                                                      title: const Text(
+                                                          'Thư viện'),
+                                                      onTap: () {
+                                                        _pickImageFrom(
+                                                            ImageSource
+                                                                .gallery);
+                                                        Navigator.pop(context);
+                                                      },
+                                                    ),
+                                                    ListTile(
+                                                      leading: const Icon(
+                                                          Icons.camera_alt),
+                                                      title: const Text(
+                                                          'Chụp ảnh'),
+                                                      onTap: () {
+                                                        _pickImageFrom(
+                                                            ImageSource.camera);
+                                                        Navigator.pop(context);
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            });
+                                      },
                                     ),
                                     GestureDetector(
                                       child: const Icon(
